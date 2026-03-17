@@ -245,6 +245,9 @@ class _FlutterFlowDropDownState<T> extends State<FlutterFlowDropDown<T>> {
         // Phase 5: Multi-select
         isMultiSelect: widget.isMultiSelect,
         multiSelectDisplayText: multiSelectDisplayText,
+        multiSelectSelectedLabels: isMultiSelect
+            ? currentValues.map((v) => optionLabels[v] ?? v.toString()).toSet()
+            : null,
         // Phase 6: Label & polish
         labelText: widget.labelText,
         labelTextStyle: widget.labelTextStyle,
@@ -330,6 +333,7 @@ class GenericDropdownWidget extends StatefulWidget {
     // Phase 5: Multi-select
     bool? isMultiSelect,
     this.multiSelectDisplayText,
+    this.multiSelectSelectedLabels,
     // Phase 6: Label & polish
     this.labelText,
     this.labelTextStyle,
@@ -379,6 +383,7 @@ class GenericDropdownWidget extends StatefulWidget {
   // Phase 5
   final bool isMultiSelect;
   final String? multiSelectDisplayText;
+  final Set<String>? multiSelectSelectedLabels;
   // Phase 6
   final String? labelText;
   final TextStyle? labelTextStyle;
@@ -583,6 +588,7 @@ class _GenericDropdownWidgetState extends State<GenericDropdownWidget> with Tick
               searchCursorColor: widget.searchCursorColor,
               // Phase 5: Multi-select
               isMultiSelect: widget.isMultiSelect,
+              initialSelectedLabels: widget.multiSelectSelectedLabels ?? {},
               onMultiSelectToggle: widget.isMultiSelect
                   ? (item) async {
                       // Callback to parent for multi-select toggle
@@ -842,6 +848,7 @@ class _GenericDropDownMenuWidget extends StatefulWidget {
     // Phase 5: Multi-select
     this.isMultiSelect = false,
     this.onMultiSelectToggle,
+    this.initialSelectedLabels = const {},
   }) : menuMaxWidth = menuMaxWidth ?? 340.0;
 
   final List<AccessibilityDropDownItemStruct>? dropdownOptions;
@@ -863,6 +870,7 @@ class _GenericDropDownMenuWidget extends StatefulWidget {
   // Phase 5
   final bool isMultiSelect;
   final Future Function(AccessibilityDropDownItemStruct item)? onMultiSelectToggle;
+  final Set<String> initialSelectedLabels;
 
   @override
   State<_GenericDropDownMenuWidget> createState() => _GenericDropDownMenuWidgetState();
@@ -871,12 +879,14 @@ class _GenericDropDownMenuWidget extends StatefulWidget {
 class _GenericDropDownMenuWidgetState extends State<_GenericDropDownMenuWidget> {
   final _shortcutsFocusNode = FocusNode();
   late final TextEditingController _searchController;
+  late Set<String> _selectedLabels;
   String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
     _searchController = TextEditingController();
+    _selectedLabels = Set<String>.from(widget.initialSelectedLabels);
     if (widget.isSearchable) {
       _searchController.addListener(_onSearchChanged);
     }
@@ -913,6 +923,9 @@ class _GenericDropDownMenuWidgetState extends State<_GenericDropDownMenuWidget> 
 
     return Shortcuts(
       shortcuts: {
+        SingleActivator(LogicalKeyboardKey.escape): VoidCallbackIntent(() {
+          Navigator.of(context).pop();
+        }),
         SingleActivator(LogicalKeyboardKey.arrowUp): VoidCallbackIntent(() async {
           FocusScope.of(context).previousFocus();
         }),
@@ -1000,12 +1013,20 @@ class _GenericDropDownMenuWidgetState extends State<_GenericDropDownMenuWidget> 
                               final optionsItem = options[optionsIndex];
                               return Semantics(
                                 label: optionsItem.label,
-                                selected: optionsItem.label == widget.selectedOption,
+                                selected: widget.isMultiSelect
+                                    ? _selectedLabels.contains(optionsItem.label)
+                                    : optionsItem.label == widget.selectedOption,
                                 focusable: true,
                                 child: FFFocusIndicator(
                                   onTap: () async {
                                     if (widget.isMultiSelect) {
-                                      // Phase 5: Toggle without closing
+                                      // Phase 5: Toggle local state and notify parent
+                                      final label = optionsItem.label;
+                                      if (_selectedLabels.contains(label)) {
+                                        _selectedLabels.remove(label);
+                                      } else {
+                                        _selectedLabels.add(label);
+                                      }
                                       await widget.onMultiSelectToggle?.call(optionsItem);
                                       if (mounted) setState(() {});
                                     } else {
@@ -1023,7 +1044,9 @@ class _GenericDropDownMenuWidgetState extends State<_GenericDropDownMenuWidget> 
                                     key: Key('Keyvbp_${optionsIndex}_of_${options.length}'),
                                     keyPrefix: widget.keyPrefix!,
                                     itemLabel: optionsItem.label,
-                                    isSelected: optionsItem.label == widget.selectedOption,
+                                    isSelected: widget.isMultiSelect
+                                        ? _selectedLabels.contains(optionsItem.label)
+                                        : optionsItem.label == widget.selectedOption,
                                     textStyle: widget.itemTextStyle,
                                     // Phase 5: Multi-select checkbox
                                     isMultiSelect: widget.isMultiSelect,
