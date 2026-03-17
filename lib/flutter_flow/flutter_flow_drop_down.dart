@@ -538,6 +538,25 @@ class _GenericDropdownWidgetState extends State<GenericDropdownWidget> with Tick
     }
   }
 
+  /// Focuses the first traversable descendant of [_focusNode] (i.e. the
+  /// InkWell inside FFFocusIndicator) so the visual focus indicator appears.
+  /// Falls back to [_focusNode] itself if no descendant is found.
+  void _restoreFocusToTrigger() {
+    final target = _firstTraversableDescendant(_focusNode);
+    (target ?? _focusNode).requestFocus();
+  }
+
+  static FocusNode? _firstTraversableDescendant(FocusNode node) {
+    for (final child in node.children) {
+      if (child.canRequestFocus && !child.skipTraversal) {
+        return child;
+      }
+      final desc = _firstTraversableDescendant(child);
+      if (desc != null) return desc;
+    }
+    return null;
+  }
+
   Future<void> _openMenu(BuildContext context) async {
     if (widget.isDisabled) return;
 
@@ -603,7 +622,7 @@ class _GenericDropdownWidgetState extends State<GenericDropdownWidget> with Tick
     ).then((value) {
       safeSetState(() => _model.menuSelectedOption = value);
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _focusNode.requestFocus();
+        _restoreFocusToTrigger();
       });
     });
 
@@ -628,7 +647,7 @@ class _GenericDropdownWidgetState extends State<GenericDropdownWidget> with Tick
       // on the <flt-semantics> element matching this dropdown's aria-label.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        _focusNode.requestFocus();
+        _restoreFocusToTrigger();
         final label = _getDisplayText();
         focusDomSemanticsElement(label);
       });
